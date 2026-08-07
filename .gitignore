@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+bin/
+build/
+develop-eggs/
+dist/
+
+.venv/
+venv/
+ENV/
+env/
+
+downloads/
+concat.txt
+silence.mp3
+playlist_mix.mp3
