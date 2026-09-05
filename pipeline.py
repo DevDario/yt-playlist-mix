@@ -7,8 +7,10 @@ tracks into a single audio file separated by short pauses.
 from __future__ import annotations
 
 import glob
+import os
 import shutil
 import subprocess
+import sys
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,6 +24,37 @@ OUTPUT_FILE = Path("playlist_mix.mp3")
 
 SILENCE_SECONDS = 0.5
 BITRATE = "320k"
+
+
+def _frozen_base() -> Path | None:
+    """Return the extraction dir of a PyInstaller one-file bundle, if frozen."""
+    if getattr(sys, "frozen", False):
+        return Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+    return None
+
+
+def _prepend_bundle_to_path() -> None:
+    """Make bundled tooling (ffmpeg/ffprobe) visible on PATH for yt-dlp."""
+    base = _frozen_base()
+    if base is not None:
+        binary_dir = base / "ffmpeg-bin"
+        if binary_dir.is_dir():
+            os.environ["PATH"] = str(binary_dir) + os.pathsep + os.environ.get("PATH", "")
+
+
+def _tool(name: str) -> str:
+    """Absolute path to a bundled executable, or the bare command name."""
+    base = _frozen_base()
+    if base is not None:
+        exe = base / "ffmpeg-bin" / (name + (".exe" if os.name == "nt" else ""))
+        if exe.exists():
+            return str(exe)
+    return name
+
+
+_prepend_bundle_to_path()
+_FFMPEG = _tool("ffmpeg")
+_FFPROBE = _tool("ffprobe")
 
 
 class PipelineCancelled(Exception):
@@ -164,7 +197,7 @@ def create_silence() -> None:
     try:
         subprocess.run(
             [
-                "ffmpeg",
+                _FFMPEG,
                 "-y",
                 "-f",
                 "lavfi",
@@ -265,7 +298,7 @@ def _probe_duration(path: Path) -> float:
     try:
         out = subprocess.run(
             [
-                "ffprobe",
+                _FFPROBE,
                 "-v",
                 "error",
                 "-show_entries",
@@ -302,7 +335,7 @@ def merge_files(playlist: PlaylistInfo, files: list[str], on_progress, cancel_ev
         raise PipelineCancelled("cancelled")
 
     cmd = [
-        "ffmpeg",
+        _FFMPEG,
         "-y",
         "-f",
         "concat",
