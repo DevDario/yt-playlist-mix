@@ -24,11 +24,15 @@ from textual.widgets import (
     Label,
     LoadingIndicator,
     ProgressBar,
+    RadioButton,
+    RadioSet,
     Static,
 )
 from textual.worker import get_current_worker
 
 from pipeline import (
+    SILENCE_SECONDS,
+    DownloadGate,
     PipelineCancelled,
     PipelineError,
     PlaylistInfo,
@@ -361,6 +365,26 @@ class ProgressScreen(Screen):
         padding: 0 1;
     }
 
+    #mode-choice {
+        height: auto;
+        margin: 1 0 1 0;
+        padding: 1 2;
+        border: round $accent;
+    }
+
+    #mode-question {
+        margin-bottom: 1;
+        text-style: bold;
+    }
+
+    #mode-radios {
+        margin-bottom: 1;
+    }
+
+    #continue {
+        min-width: 24;
+    }
+
     .hidden {
         display: none;
     }
@@ -385,6 +409,7 @@ class ProgressScreen(Screen):
     def __init__(self, playlist: PlaylistInfo) -> None:
         self.playlist = playlist
         self.cancel_event = threading.Event()
+        self.gate = DownloadGate()
         self.row_keys: dict[int, object] = {}
         self._log_lines: list[tuple[str, str]] = []
         super().__init__()
@@ -400,6 +425,20 @@ class ProgressScreen(Screen):
             yield ProgressBar(total=100, id="merge-bar", classes="hidden")
             yield Static("", id="log", classes="hidden")
             yield DataTable(id="track-table", zebra_stripes=True, cursor_type="row")
+            with Vertical(id="mode-choice", classes="hidden"):
+                yield Static(
+                    "Downloads complete. How do you want the files?", id="mode-question"
+                )
+                yield RadioSet(
+                    RadioButton(
+                        f"Create a mix ({SILENCE_SECONDS} s of silence between tracks)",
+                        value=True,
+                    ),
+                    RadioButton("Keep each track as its own MP3", id="opt-individual"),
+                    id="mode-radios",
+                )
+                with Horizontal(id="mode-buttons"):
+                    yield Button("Continue", id="continue", variant="primary")
             with Horizontal(id="buttons"):
                 yield Button("Cancel", id="cancel", variant="warning")
                 yield Button("New Mix", id="new-mix", variant="primary", disabled=True)
@@ -428,7 +467,7 @@ class ProgressScreen(Screen):
             self._safe(self._handle_progress, kind, kwargs)
 
         try:
-            run_pipeline(self.playlist, on_progress, self.cancel_event)
+            run_pipeline(self.playlist, on_progress, self.cancel_event, self.gate)
         except PipelineCancelled:
             self._safe(self._handle_progress, "cancelled", {})
         except PipelineError as exc:
@@ -459,6 +498,8 @@ class ProgressScreen(Screen):
                 self._on_track_error(data)
             elif kind == "download_log":
                 self._on_download_log(data)
+            elif kind == "mode_prompt":
+                self._on_mode_prompt(data)
             elif kind == "merge":
                 self.query_one("#merge-bar", ProgressBar).update(progress=data.get("percent", 0))
             elif kind == "done":
@@ -541,18 +582,21 @@ class ProgressScreen(Screen):
     def _on_done(self, data: dict) -> None:
         count = data.get("count", 0)
         out = data.get("file", "")
+        mode = data.get("mode", DownloadGate.MODE_MIX)
         plural = "s" if count != 1 else ""
-        if count < len(self.playlist.tracks):
+        if mode == DownloadGate.MODE_INDIVIDUAL:
+            msg = f"Done! {count} track{plural} saved individually in {out}"
+        elif count < len(self.playlist.tracks):
             failed = len(self.playlist.tracks) - count
             msg = (
                 f"Done! Merged {count} of {len(self.playlist.tracks)} tracks "
                 f"into {out} ({failed} failed)"
             )
-            self.query_one("#phase", Static).update(msg)
         else:
             msg = f"Done! Merged {count} track{plural} into {out}"
-            self.query_one("#phase", Static).update(msg)
-        self.query_one("#merge-label", Static).update("")
+        self.query_one("#phase", Static).update(msg)
+        if mode != DownloadGate.MODE_INDIVIDUAL:
+            self.query_one("#merge-label", Static).update("")
         self._finish()
 
     def _on_error(self, message: str) -> None:
@@ -562,6 +606,21 @@ class ProgressScreen(Screen):
     def _on_cancelled(self) -> None:
         self.query_one("#phase", Static).update("Cancelled.")
         self._finish()
+
+    def _on_mode_prompt(self, data: dict) -> None:
+        text = data.get("text", "Choose how to finalize the files.")
+        self.query_one("#phase", Static).update(text)
+        self.query_one("#track-label", Static).update("")
+        self.query_one("#track-bar", ProgressBar).update(progress=100)
+        self.query_one("#mode-choice").set_class(False, "hidden")
+        self.query_one("#mode-radios", RadioSet).focus()
+
+    @on(Button.Pressed, "#continue")
+    def on_continue(self) -> None:
+        radios = self.query_one(RadioSet)
+        mode = DownloadGate.MODE_MIX if radios.pressed_index == 0 else DownloadGate.MODE_INDIVIDUAL
+        self.query_one("#mode-choice").set_class(True, "hidden")
+        self.gate.decide(mode)
 
     @on(Button.Pressed, "#cancel")
     def on_cancel(self) -> None:

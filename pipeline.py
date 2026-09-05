@@ -9,6 +9,7 @@ from __future__ import annotations
 import glob
 import shutil
 import subprocess
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,6 +30,31 @@ class PipelineCancelled(Exception):
 
 class PipelineError(Exception):
     """Raised for expected failures (fetch, download, merge, ...)."""
+
+
+class DownloadGate:
+    """Pauses the pipeline after downloads so the UI can ask the user how to
+    finalize the files: merge them into one mix, or keep them individually."""
+
+    MODE_MIX = "mix"
+    MODE_INDIVIDUAL = "individual"
+
+    def __init__(self) -> None:
+        self._decided = threading.Event()
+        self._mode: str = self.MODE_MIX
+
+    def await_decision(self, on_progress, cancel_event) -> str:
+        """Block the worker thread until decide() is called or the user cancels."""
+        on_progress("mode_prompt", text="Downloads complete. Choose how to finalize the files.")
+        while not self._decided.is_set():
+            if cancel_event.is_set():
+                raise PipelineCancelled("cancelled")
+            self._decided.wait(0.1)
+        return self._mode
+
+    def decide(self, mode: str) -> None:
+        self._mode = mode
+        self._decided.set()
 
 
 class _NullLogger:
@@ -335,8 +361,17 @@ def _check_cancel(cancel_event) -> None:
         raise PipelineCancelled("cancelled")
 
 
-def run_pipeline(playlist: PlaylistInfo, on_progress, cancel_event) -> None:
-    """Run the full pipeline: clean, silence, download, merge."""
+def run_pipeline(
+    playlist: PlaylistInfo,
+    on_progress,
+    cancel_event,
+    gate: DownloadGate | None = None,
+) -> None:
+    """Run the full pipeline: clean, silence, download, then finalize.
+
+    After the downloads the pipeline pauses so the caller can decide whether to
+    merge the tracks into one mix or keep each track as its own file.
+    """
     _check_cancel(cancel_event)
     on_progress("phase", text="Cleaning output directory")
     prepare_output_dir()
@@ -361,12 +396,22 @@ def run_pipeline(playlist: PlaylistInfo, on_progress, cancel_event) -> None:
     if failed:
         on_progress("track_failed", indices=failed)
 
+    mode = DownloadGate.MODE_MIX
+    if gate is not None:
+        mode = gate.await_decision(on_progress, cancel_event)
+
+    if mode == DownloadGate.MODE_INDIVIDUAL:
+        _check_cancel(cancel_event)
+        on_progress("phase", text="Finished")
+        on_progress("done", file=str(OUTPUT_DIR), count=len(files), mode=mode)
+        return
+
     on_progress("phase", text="Merging tracks")
     merge_files(playlist, files, on_progress, cancel_event)
 
     _check_cancel(cancel_event)
     on_progress("phase", text="Finished")
-    on_progress("done", file=str(OUTPUT_FILE), count=len(files))
+    on_progress("done", file=str(OUTPUT_FILE), count=len(files), mode=mode)
 
 
 def _as_seconds(value) -> float | None:
