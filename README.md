@@ -7,7 +7,7 @@ A terminal app that turns a YouTube playlist into a single MP3 mix. It downloads
 - Paste a playlist URL, the URL is validated before anything runs
 - Preview the playlist (tracks, channels, durations) before starting
 - Downloads each track as MP3 with per-track progress, speed and ETA
-- Inserts a 0.5s pause between tracks, then merges everything into a single `playlist_mix.mp3`
+- After the download, choose how to finalize: merge into a single `playlist_mix.mp3` with a 0.5s pause between tracks, or keep every track as its own MP3 in `downloads/`
 - Live per-track status table, log of failed downloads and merge progress bar
 - Cancel anytime (failed tracks are skipped, the rest are still merged)
 
@@ -37,6 +37,40 @@ python app.py
 3. Wait for the download and merge to finish. The result is written to `playlist_mix.mp3` in the project root.
 
 Keybindings: `Ctrl+Q` quits, `Esc` goes back from the preview screen.
+
+## Ready-to-run executables
+
+Prebuilt executables for **Windows, macOS and Linux** are attached to every
+[GitHub release](https://github.com/DevDario/yt-playlist-mix/releases). They
+bundle Python, yt-dlp and ffmpeg, so users do not need anything installed.
+
+- Windows: download `YouTubePlaylistMixer-1.0.0-windows-x86_64.exe` and double-click it in a terminal.
+- macOS: download `YouTubePlaylistMixer-1.0.0-macos-universal2` and run it from a terminal (right-click → Open the first time).
+- Linux: download `YouTubePlaylistMixer-1.0.0-linux-x86_64` and run `./YouTubePlaylistMixer-1.0.0-linux-x86_64`.
+
+Run `YouTubePlaylistMixer --version` to check the build.
+
+### Publishing a release
+
+```bash
+git tag v1.0.0
+git push --tags
+```
+
+The [`release.yml`](.github/workflows/release.yml) workflow builds all three
+executables on GitHub runners and attaches them to the release. Use
+**Actions → Build executables → Run workflow** to build without a release.
+
+### Building locally
+
+1. Install build tools: `pip install pyinstaller` (plus `static-ffmpeg` to fetch ffmpeg or drop your own binaries into `ffmpeg-bin/`).
+2. Create the icon if needed: `python scripts/make_icon.py`.
+3. On macOS, build the icon set first: `iconutil -c icns assets/iconset -o assets/icon.icns`.
+4. `pyinstaller --noconfirm yt-playlist-mix.spec`
+5. The executable lands in `dist/YouTubePlaylistMixer` (`.exe` on Windows).
+
+Note: binaries are unsigned, so Windows SmartScreen shows an "unknown
+publisher" warning. Code signing requires a certificate and is not done here.
 
 ## How it works
 

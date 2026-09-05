@@ -8,6 +8,7 @@ into a single MP3 with short pauses in between.
 from __future__ import annotations
 
 import re
+import sys
 import threading
 
 from rich.text import Text
@@ -41,6 +42,7 @@ from pipeline import (
 )
 
 PLAYLIST_URL_RE = re.compile(r"[?&]list=[\w-]{6,}")
+VERSION = "1.0.0"
 
 
 class PlaylistValidator(Validator):
@@ -675,6 +677,15 @@ def fmt_eta(seconds) -> str:
 
 
 def main() -> None:
+    args = sys.argv[1:]
+    if "--version" in args:
+        print(f"YouTube Playlist Mixer {VERSION}")
+        return
+    if "--help" in args or "-h" in args:
+        usage = "Usage: YouTubePlaylistMixer [--version] [--help]"
+        usage += "\n\nPaste a YouTube playlist URL to mix it into one audio file."
+        print(usage)
+        return
     PlaylistMixerApp().run()
 
 

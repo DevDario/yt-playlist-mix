@@ -1,12 +1,22 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for the PyPI-free Windows .exe build.
+"""PyInstaller spec. Builds a platform-specific single-file executable.
 
-Build on Windows with:  pyinstaller yt-playlist-mix.spec
-Requires a local ffmpeg-bin/ next to this file containing ffmpeg.exe and
-ffprobe.exe (the GitHub Actions workflow provisions them automatically).
+Windows / macOS:  pyinstaller yt-playlist-mix.spec
+Linux:            pyinstaller --noconfirm yt-playlist-mix.spec
+
+Requires a local ffmpeg-bin/ (ffmpeg + ffprobe) next to this file; the GitHub
+Actions workflow provisions it via the `static-ffmpeg` package.
 """
 
+import sys
+
 from PyInstaller.building.build_main import EXE, PYZ, Analysis
+
+icon = None
+if sys.platform.startswith("win"):
+    icon = "assets/icon.ico"
+elif sys.platform == "darwin":
+    icon = "assets/icon.icns"
 
 a = Analysis(
     ["app.py"],
@@ -42,4 +52,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=icon,
 )
