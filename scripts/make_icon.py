@@ -130,6 +130,27 @@ def write_ico(path: Path, sizes: list[int]) -> None:
     path.write_bytes(header + entries + b"".join(d for _, d in pngs))
 
 
+# macOS ICNS PNG chunk types, keyed by pixel size.
+_ICNS_TYPES = {
+    16: b"icp4",
+    32: b"icp5",
+    64: b"icp6",
+    128: b"ic07",
+    256: b"ic08",
+    512: b"ic09",
+    1024: b"ic10",
+}
+
+
+def write_icns(path: Path, sizes: list[int]) -> None:
+    chunks = b""
+    for size in sorted(set(sizes)):
+        data = _png_bytes(render(size))
+        chunks += _ICNS_TYPES[size] + struct.pack(">I", len(data) + 8) + data
+    total = 8 + len(chunks)
+    path.write_bytes(b"icns" + struct.pack(">I", total) + chunks)
+
+
 def main() -> None:
     ASSETS.mkdir(exist_ok=True)
     ICONSET.mkdir(exist_ok=True)
@@ -140,6 +161,8 @@ def main() -> None:
     write_ico(ASSETS / "icon.ico", ico_sizes)
     for size in ico_sizes:
         write_png(ASSETS / f"icon-{size}.png", render(size))
+
+    write_icns(ASSETS / "icon.icns", [16, 32, 64, 128, 256, 512, 1024])
 
     scheme = {
         "icon_16x16.png": 16,

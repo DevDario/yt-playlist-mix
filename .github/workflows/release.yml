@@ -19,7 +19,7 @@ jobs:
           - os: ubuntu-latest
             suffix: linux-x86_64
           - os: macos-latest
-            suffix: macos-universal2
+            suffix: macos
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -34,24 +34,7 @@ jobs:
           pip install pyinstaller yt-dlp textual static-ffmpeg
 
       - name: Fetch static ffmpeg/ffprobe
-        run: |
-          python - <<'EOF'
-          import os
-          import pathlib
-          import shutil
-          import static_ffmpeg
-
-          tools = static_ffmpeg.run.get_or_fetch_platform_executables_else_raise()
-          out = pathlib.Path("ffmpeg-bin")
-          out.mkdir(exist_ok=True)
-          for src in tools:
-              shutil.copy(src, out / os.path.basename(src))
-          print("ffmpeg-bin:", sorted(p.name for p in out.iterdir()))
-          EOF
-
-      - name: Build macOS .icns icon
-        if: runner.os == 'macOS'
-        run: iconutil -c icns assets/iconset -o assets/icon.icns
+        run: python scripts/fetch_ffmpeg.py
 
       - name: Build with PyInstaller
         run: pyinstaller --noconfirm yt-playlist-mix.spec

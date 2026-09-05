@@ -63,11 +63,10 @@ executables on GitHub runners and attaches them to the release. Use
 
 ### Building locally
 
-1. Install build tools: `pip install pyinstaller` (plus `static-ffmpeg` to fetch ffmpeg or drop your own binaries into `ffmpeg-bin/`).
-2. Create the icon if needed: `python scripts/make_icon.py`.
-3. On macOS, build the icon set first: `iconutil -c icns assets/iconset -o assets/icon.icns`.
-4. `pyinstaller --noconfirm yt-playlist-mix.spec`
-5. The executable lands in `dist/YouTubePlaylistMixer` (`.exe` on Windows).
+1. Install build tools: `pip install pyinstaller static-ffmpeg` (or put your own ffmpeg/ffprobe into `ffmpeg-bin/`).
+2. Create the icon assets (`icon.ico`, `icon.icns`, ...): `python scripts/make_icon.py`.
+3. `pyinstaller --noconfirm yt-playlist-mix.spec`
+4. The executable lands in `dist/YouTubePlaylistMixer` (`.exe` on Windows).
 
 Note: binaries are unsigned, so Windows SmartScreen shows an "unknown
 publisher" warning. Code signing requires a certificate and is not done here.
